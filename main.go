@@ -79,8 +79,8 @@ func parseLsFiles(raw string) []string {
 	return strings.Split(raw, "\n")
 }
 
-// HeadFiles returns the files at HEAD.
-func (r *Repo) HeadFiles() (headFiles []string, err error) {
+// headFiles returns the files at HEAD.
+func (r *Repo) headFiles() (headFiles []string, err error) {
 	out, err := checkOutput(r.path, "git", "ls-files")
 	if err != nil {
 		return
@@ -99,8 +99,8 @@ func parseRevList(raw string) (t int, err error) {
 	return
 }
 
-// FirstCommitTime returns the timestamp of the first commit in the history.
-func (r *Repo) FirstCommitTime() (t int, err error) {
+// firstCommitTime returns the timestamp of the first commit in the history.
+func (r *Repo) firstCommitTime() (t int, err error) {
 	out, err := checkOutput(r.path, "git", "rev-list", "--max-parents=0", "--format=%ct", "HEAD")
 	if err != nil {
 		return
@@ -108,8 +108,8 @@ func (r *Repo) FirstCommitTime() (t int, err error) {
 	return parseRevList(out)
 }
 
-// LastCommitTime returns the timestamp of the last commit in the history.
-func (r *Repo) LastCommitTime() (t int, err error) {
+// lastCommitTime returns the timestamp of the last commit in the history.
+func (r *Repo) lastCommitTime() (t int, err error) {
 	out, err := checkOutput(r.path, "git", "rev-list", "--max-count=1", "--format=%ct", "HEAD")
 	if err != nil {
 		return
@@ -135,8 +135,8 @@ func parseLog(raw string) ([]commit, error) {
 	return commits, nil
 }
 
-// BugFixCommits returns the bug-fix commits.
-func (r *Repo) BugFixCommits() ([]commit, error) {
+// bugFixCommits returns the bug-fix commits.
+func (r *Repo) bugFixCommits() ([]commit, error) {
 	// --diff-filter ignores commits with no files attached
 	out, err := checkOutput(r.path, "git", "log", "--diff-filter=ACDMRTUXB", "-E", "-i", "--grep="+regexp, "--format=format:%ct", "--name-only")
 	if err != nil {
@@ -159,21 +159,21 @@ func scoreFunc(t float64) float64 {
 
 // Hotspots returns the top 10% hotspots, ranked by score.
 func (r *Repo) Hotspots() (HotspotList, error) {
-	commits, err := r.BugFixCommits()
+	commits, err := r.bugFixCommits()
 	if err != nil {
 		return nil, err
 	}
 
-	tfirst, err := r.FirstCommitTime()
+	tfirst, err := r.firstCommitTime()
 	if err != nil {
 		return nil, err
 	}
-	tlast, err := r.LastCommitTime()
+	tlast, err := r.lastCommitTime()
 	if err != nil {
 		return nil, err
 	}
 
-	headFiles, err := r.HeadFiles()
+	headFiles, err := r.headFiles()
 	if err != nil {
 		return nil, err
 	}
