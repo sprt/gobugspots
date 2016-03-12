@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"math"
@@ -90,12 +91,15 @@ func (r *Repo) HeadFiles() (headFiles []string, err error) {
 
 func parseRevList(raw string) (t int, err error) {
 	lines := strings.Split(raw, "\n")
+	if len(lines) != 2 {
+		err = errors.New("no commits")
+		return
+	}
 	t, err = strconv.Atoi(lines[1])
 	return
 }
 
 func (r *Repo) FirstCommitTime() (t int, err error) {
-	// XXX: handle no commits or will panic
 	out, err := checkOutput(r.path, "git", "rev-list", "--max-parents=0", "--format=%ct", "HEAD")
 	if err != nil {
 		return
@@ -104,7 +108,6 @@ func (r *Repo) FirstCommitTime() (t int, err error) {
 }
 
 func (r *Repo) LastCommitTime() (t int, err error) {
-	// XXX: handle no commits or will panic
 	out, err := checkOutput(r.path, "git", "rev-list", "--max-count=1", "--format=%ct", "HEAD")
 	if err != nil {
 		return
