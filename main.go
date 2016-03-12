@@ -70,11 +70,6 @@ func sortMapByValue(m map[string]float64) HotspotList {
 	return pl
 }
 
-// NewRepo returns a pointer to a new Repo object.
-func NewRepo(path string) *Repo {
-	return &Repo{"."}
-}
-
 func parseLsFiles(raw string) []string {
 	return strings.Split(raw, "\n")
 }
@@ -202,7 +197,7 @@ func (r *Repo) Hotspots() (HotspotList, error) {
 }
 
 func main() {
-	repo := NewRepo(".")
+	repo := &Repo{"."}
 	hotspots, err := repo.Hotspots()
 	if err != nil {
 		log.Fatalln(err)
