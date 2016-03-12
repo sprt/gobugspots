@@ -99,6 +99,7 @@ func parseRevList(raw string) (t int, err error) {
 	return
 }
 
+// FirstCommitTime returns the timestamp of the first commit in the history.
 func (r *Repo) FirstCommitTime() (t int, err error) {
 	out, err := checkOutput(r.path, "git", "rev-list", "--max-parents=0", "--format=%ct", "HEAD")
 	if err != nil {
@@ -107,6 +108,7 @@ func (r *Repo) FirstCommitTime() (t int, err error) {
 	return parseRevList(out)
 }
 
+// LastCommitTime returns the timestamp of the last commit in the history.
 func (r *Repo) LastCommitTime() (t int, err error) {
 	out, err := checkOutput(r.path, "git", "rev-list", "--max-count=1", "--format=%ct", "HEAD")
 	if err != nil {
@@ -155,6 +157,7 @@ func scoreFunc(t float64) float64 {
 	return 1 / (1 + math.Exp(-12*t+12))
 }
 
+// Hotspots returns the top 10% hotspots, ranked by score.
 func (r *Repo) Hotspots() (HotspotList, error) {
 	commits, err := r.BugFixCommits()
 	if err != nil {
