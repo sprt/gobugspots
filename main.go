@@ -14,62 +14,18 @@ import (
 	"github.com/google/btree"
 )
 
-const regexp = "\\b(fix(e[sd])?|close[sd]?) (#|gh-)[1-9][0-9]*\\b"
+const defaultCommitRegexp = "\\b(fix(e[sd])?|close[sd]?) (#|gh-)[1-9][0-9]*\\b"
 
-type commit struct {
-	t     time.Time
-	files []string
+func normalizeTimestamp(t, lo, hi int64) float64 {
+	return float64(t-lo) / float64(hi-lo)
 }
 
-// Hotspot represents a bug-prone file.
-type Hotspot struct {
-	// File is a path relative to the working directory.
-	File string
-	// Score is the score of the file according to the ranking function.
-	Score float64
-}
-
-// Repo represents a git repository.
-type Repo struct {
-	path string
-}
-
-func checkOutput(path, cmd string, args ...string) (out string, err error) {
-	wd, err := os.Getwd()
-	if err != nil {
-		return
-	}
-	if err = os.Chdir(path); err != nil {
-		return
-	}
-	defer os.Chdir(wd)
-
-	outb, err := exec.Command(cmd, args...).Output()
-	if err != nil {
-		return
-	}
-	out = strings.TrimSpace(string(outb[:]))
-
-	return
-}
-
-// Less returns true if a.Score > b.Score (sic).
-func (a Hotspot) Less(b btree.Item) bool {
-	return a.Score > b.(*Hotspot).Score
+func scoreFunc(t float64) float64 {
+	return 1 / (1 + math.Exp(-12*t+12))
 }
 
 func parseLsFiles(raw string) []string {
 	return strings.Split(raw, "\n")
-}
-
-// headFiles returns the files at HEAD.
-func (r *Repo) headFiles() (headFiles []string, err error) {
-	out, err := checkOutput(r.path, "git", "ls-files")
-	if err != nil {
-		return
-	}
-	headFiles = parseLsFiles(out)
-	return
 }
 
 func parseRevList(raw string) (t int, err error) {
@@ -80,24 +36,6 @@ func parseRevList(raw string) (t int, err error) {
 	}
 	t, err = strconv.Atoi(lines[1])
 	return
-}
-
-// firstCommitTime returns the timestamp of the first commit in the history.
-func (r *Repo) firstCommitTime() (t int, err error) {
-	out, err := checkOutput(r.path, "git", "rev-list", "--max-parents=0", "--format=%ct", "HEAD")
-	if err != nil {
-		return
-	}
-	return parseRevList(out)
-}
-
-// lastCommitTime returns the timestamp of the last commit in the history.
-func (r *Repo) lastCommitTime() (t int, err error) {
-	out, err := checkOutput(r.path, "git", "rev-list", "--max-count=1", "--format=%ct", "HEAD")
-	if err != nil {
-		return
-	}
-	return parseRevList(out)
 }
 
 // assumes `git log --format=format:%ct --name-only'
@@ -118,10 +56,56 @@ func parseLog(raw string) ([]commit, error) {
 	return commits, nil
 }
 
+type commit struct {
+	t     time.Time
+	files []string
+}
+
+// Repo is a path to a git a repository.
+type Repo struct {
+	Path string
+}
+
+// NewRepoByPath returns a pointer to a new Repo.
+func NewRepoByPath(path string) *Repo {
+	return &Repo{path}
+}
+
+func (r *Repo) cmdOutput(cmd string, args ...string) (out string, err error) {
+	// TODO: make thread-safe
+	wd, err := os.Getwd()
+	if err != nil {
+		return
+	}
+	if err = os.Chdir(r.Path); err != nil {
+		return
+	}
+	defer os.Chdir(wd)
+
+	outb, err := exec.Command(cmd, args...).Output()
+	if err != nil {
+		return
+	}
+	out = strings.TrimSpace(string(outb[:]))
+
+	return
+}
+
+// headFiles returns the files at HEAD.
+func (r *Repo) headFiles() (headFiles []string, err error) {
+	out, err := r.cmdOutput("git", "ls-files")
+	if err != nil {
+		return
+	}
+	headFiles = parseLsFiles(out)
+	return
+}
+
 // bugFixCommits returns the bug-fix commits.
-func (r *Repo) bugFixCommits() ([]commit, error) {
+func (r *Repo) bugFixCommits(regexp string) ([]commit, error) {
 	// --diff-filter ignores commits with no files attached
-	out, err := checkOutput(r.path, "git", "log", "--diff-filter=ACDMRTUXB", "-E", "-i", "--grep="+regexp, "--format=format:%ct", "--name-only")
+	out, err := r.cmdOutput("git", "log", "--diff-filter=ACDMRTUXB",
+		"-E", "-i", "--grep="+regexp, "--format=format:%ct", "--name-only")
 	if err != nil {
 		return []commit{}, err
 	}
@@ -132,31 +116,68 @@ func (r *Repo) bugFixCommits() ([]commit, error) {
 	return commits, nil
 }
 
-func normalizeTimestamp(t, lo, hi int64) float64 {
-	return float64(t-lo) / float64(hi-lo)
+// firstCommitTime returns the timestamp of the first commit in the history.
+func (r *Repo) firstCommitTime() (t int, err error) {
+	out, err := r.cmdOutput("git", "rev-list", "--max-parents=0", "--format=%ct", "HEAD")
+	if err != nil {
+		return
+	}
+	return parseRevList(out)
 }
 
-func scoreFunc(t float64) float64 {
-	return 1 / (1 + math.Exp(-12*t+12))
+// lastCommitTime returns the timestamp of the last commit in the history.
+func (r *Repo) lastCommitTime() (t int, err error) {
+	out, err := r.cmdOutput("git", "rev-list", "--max-count=1", "--format=%ct", "HEAD")
+	if err != nil {
+		return
+	}
+	return parseRevList(out)
+}
+
+// Hotspot represents a bug-prone file.
+type Hotspot struct {
+	// File is a path relative to the working directory.
+	File string
+	// Score is the score of the file according to the ranking function.
+	Score float64
+}
+
+// Less returns true if a.Score > b.Score (sic).
+func (a Hotspot) Less(b btree.Item) bool {
+	return a.Score > b.(*Hotspot).Score
+}
+
+type Bugspots struct {
+	Repo   *Repo
+	Regexp string
+}
+
+// NewBugspots returns a pointer to a new Bugspots object.
+func NewBugspots(repo *Repo) *Bugspots {
+	return &Bugspots{
+		Repo:   repo,
+		Regexp: defaultCommitRegexp,
+	}
 }
 
 // Hotspots returns the top 10% hotspots, ranked by score.
-func (r *Repo) Hotspots() ([]Hotspot, error) {
-	commits, err := r.bugFixCommits()
+func (b *Bugspots) Hotspots() ([]Hotspot, error) {
+	commits, err := b.Repo.bugFixCommits(b.Regexp)
 	if err != nil {
 		return nil, err
 	}
 
-	tfirst, err := r.firstCommitTime()
-	if err != nil {
-		return nil, err
-	}
-	tlast, err := r.lastCommitTime()
+	tfirst, err := b.Repo.firstCommitTime()
 	if err != nil {
 		return nil, err
 	}
 
-	headFiles, err := r.headFiles()
+	tlast, err := b.Repo.lastCommitTime()
+	if err != nil {
+		return nil, err
+	}
+
+	headFiles, err := b.Repo.headFiles()
 	if err != nil {
 		return nil, err
 	}
@@ -185,8 +206,10 @@ func (r *Repo) Hotspots() ([]Hotspot, error) {
 }
 
 func main() {
-	repo := &Repo{"."}
-	hotspots, err := repo.Hotspots()
+	repo := NewRepoByPath(".")
+	b := NewBugspots(repo)
+
+	hotspots, err := b.Hotspots()
 	if err != nil {
 		log.Fatalln(err)
 	}
