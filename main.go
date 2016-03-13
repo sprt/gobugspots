@@ -160,6 +160,11 @@ func NewBugspots(repo *Repo) *Bugspots {
 	}
 }
 
+// SetRegexp sets the regexp parameter.
+func (b *Bugspots) SetRegexp(regexp string) {
+	b.regexp = regexp
+}
+
 // Hotspots returns the top 10% hotspots, ranked by score.
 func (b *Bugspots) Hotspots() ([]Hotspot, error) {
 	commits, err := b.Repo.bugFixCommits(b.regexp)
