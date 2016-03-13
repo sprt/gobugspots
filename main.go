@@ -7,10 +7,11 @@ import (
 	"math"
 	"os"
 	"os/exec"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/google/btree"
 )
 
 const regexp = "\\b(fix(e[sd])?|close[sd]?) (#|gh-)[1-9][0-9]*\\b"
@@ -27,9 +28,6 @@ type Hotspot struct {
 	// Score is the score of the file according to the ranking function.
 	Score float64
 }
-
-// HotspotList represents a list of hotspots.
-type HotspotList []Hotspot
 
 // Repo represents a git repository.
 type Repo struct {
@@ -55,19 +53,9 @@ func checkOutput(path, cmd string, args ...string) (out string, err error) {
 	return
 }
 
-func (p HotspotList) Len() int           { return len(p) }
-func (p HotspotList) Less(i, j int) bool { return p[i].Score < p[j].Score }
-func (p HotspotList) Swap(i, j int)      { p[i], p[j] = p[j], p[i] }
-
-func sortMapByValue(m map[string]float64) HotspotList {
-	pl := make(HotspotList, len(m))
-	i := 0
-	for k, v := range m {
-		pl[i] = Hotspot{k, v}
-		i++
-	}
-	sort.Sort(sort.Reverse(pl))
-	return pl
+// Less returns true if a.Score > b.Score (sic).
+func (a Hotspot) Less(b btree.Item) bool {
+	return a.Score > b.(*Hotspot).Score
 }
 
 func parseLsFiles(raw string) []string {
@@ -153,7 +141,7 @@ func scoreFunc(t float64) float64 {
 }
 
 // Hotspots returns the top 10% hotspots, ranked by score.
-func (r *Repo) Hotspots() (HotspotList, error) {
+func (r *Repo) Hotspots() ([]Hotspot, error) {
 	commits, err := r.bugFixCommits()
 	if err != nil {
 		return nil, err
@@ -173,27 +161,27 @@ func (r *Repo) Hotspots() (HotspotList, error) {
 		return nil, err
 	}
 
-	hotspots := map[string]float64{}
-	for _, commit := range commits {
-		t := normalizeTimestamp(commit.t.Unix(), int64(tfirst), int64(tlast))
-		for _, file := range commit.files {
-			isHead := false
-			for _, headFile := range headFiles {
+	tree := btree.New(2)
+	for _, headFile := range headFiles {
+		score := 0.0
+		for _, commit := range commits {
+			t := normalizeTimestamp(commit.t.Unix(), int64(tfirst), int64(tlast))
+			for _, file := range commit.files {
 				if file == headFile {
-					isHead = true
-					break
+					score += scoreFunc(t)
 				}
 			}
-			if isHead {
-				hotspots[file] += scoreFunc(t)
-			}
 		}
+		tree.ReplaceOrInsert(&Hotspot{headFile, score})
 	}
 
-	sortedHotspots := sortMapByValue(hotspots)
-	topHotspots := sortedHotspots[:len(sortedHotspots)/10]
+	hotspots := []Hotspot{}
+	tree.Ascend(func(item btree.Item) bool {
+		hotspots = append(hotspots, *item.(*Hotspot))
+		return len(hotspots) < tree.Len()/10
+	})
 
-	return topHotspots, nil
+	return hotspots, nil
 }
 
 func main() {
