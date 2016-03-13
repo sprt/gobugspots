@@ -145,7 +145,7 @@ func (r *Repo) bugFixCommits() ([]commit, error) {
 }
 
 func normalizeTimestamp(t, lo, hi int64) float64 {
-	return float64((t - lo) / (hi - lo))
+	return float64(t-lo) / float64(hi-lo)
 }
 
 func scoreFunc(t float64) float64 {
