@@ -149,20 +149,20 @@ func (a Hotspot) Less(b btree.Item) bool {
 
 type Bugspots struct {
 	Repo   *Repo
-	Regexp string
+	regexp string
 }
 
 // NewBugspots returns a pointer to a new Bugspots object.
 func NewBugspots(repo *Repo) *Bugspots {
 	return &Bugspots{
 		Repo:   repo,
-		Regexp: defaultCommitRegexp,
+		regexp: defaultCommitRegexp,
 	}
 }
 
 // Hotspots returns the top 10% hotspots, ranked by score.
 func (b *Bugspots) Hotspots() ([]Hotspot, error) {
-	commits, err := b.Repo.bugFixCommits(b.Regexp)
+	commits, err := b.Repo.bugFixCommits(b.regexp)
 	if err != nil {
 		return nil, err
 	}
