@@ -56,6 +56,32 @@ func parseLog(raw string) ([]commit, error) {
 	return commits, nil
 }
 
+type slicer interface {
+	Iterator() func(*Hotspot) bool
+}
+
+type percentileSlicer struct {
+	tree       *btree.BTree
+	percentile float64
+	slice      []*Hotspot
+}
+
+func newPercentileSlicer(tree *btree.BTree, percentile float64) *percentileSlicer {
+	if percentile <= 0 || percentile > 1 {
+		panic("percentile must be in range (0, 1]")
+	}
+	return &percentileSlicer{
+		tree,
+		percentile,
+		make([]*Hotspot, 0, int(percentile*float64(tree.Len()))),
+	}
+}
+
+func (s *percentileSlicer) Iterator(item btree.Item) bool {
+	s.slice = append(s.slice, item.(*Hotspot))
+	return len(s.slice) < cap(s.slice)
+}
+
 type commit struct {
 	t     time.Time
 	files []string
@@ -166,7 +192,7 @@ func (b *Bugspots) SetRegexp(regexp string) {
 }
 
 // Hotspots returns the top 10% hotspots, ranked by score.
-func (b *Bugspots) Hotspots() ([]Hotspot, error) {
+func (b *Bugspots) Hotspots() ([]*Hotspot, error) {
 	commits, err := b.Repo.bugFixCommits(b.regexp)
 	if err != nil {
 		return nil, err
@@ -201,13 +227,10 @@ func (b *Bugspots) Hotspots() ([]Hotspot, error) {
 		tree.ReplaceOrInsert(&Hotspot{headFile, score})
 	}
 
-	hotspots := []Hotspot{}
-	tree.Ascend(func(item btree.Item) bool {
-		hotspots = append(hotspots, *item.(*Hotspot))
-		return len(hotspots) < tree.Len()/10
-	})
+	slicer := newPercentileSlicer(tree, 0.1)
+	tree.Ascend(slicer.Iterator)
 
-	return hotspots, nil
+	return slicer.slice, nil
 }
 
 func main() {
