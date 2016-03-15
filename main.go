@@ -129,18 +129,19 @@ func (r *Repo) bugFixCommits(regexp string) ([]commit, error) {
 	return commits, nil
 }
 
-func parseRevList(raw string) (t int, err error) {
+func parseRevList(raw string) (t64 int64, err error) {
 	lines := strings.Split(raw, "\n")
 	if len(lines) != 2 {
 		err = errors.New("no commits")
 		return
 	}
-	t, err = strconv.Atoi(lines[1])
+	t, err := strconv.Atoi(lines[1])
+	t64 = int64(t)
 	return
 }
 
 // firstCommitTime returns the timestamp of the first commit in the history.
-func (r *Repo) firstCommitTime() (t int, err error) {
+func (r *Repo) firstCommitTime() (t int64, err error) {
 	out, err := r.cmdOutput("git", "rev-list", "--max-parents=0", "--format=%ct", "HEAD")
 	if err != nil {
 		return
@@ -149,7 +150,7 @@ func (r *Repo) firstCommitTime() (t int, err error) {
 }
 
 // lastCommitTime returns the timestamp of the last commit in the history.
-func (r *Repo) lastCommitTime() (t int, err error) {
+func (r *Repo) lastCommitTime() (t int64, err error) {
 	out, err := r.cmdOutput("git", "rev-list", "--max-count=1", "--format=%ct", "HEAD")
 	if err != nil {
 		return
@@ -210,7 +211,7 @@ func (b *Bugspots) Hotspots() ([]*Hotspot, error) {
 	for _, headFile := range headFiles {
 		score := 0.0
 		for _, commit := range commits {
-			t := normalizeTimestamp(commit.t.Unix(), int64(tfirst), int64(tlast))
+			t := normalizeTimestamp(commit.t.Unix(), tfirst, tlast)
 			for _, file := range commit.files {
 				if file == headFile {
 					score += scoreFunc(t)
