@@ -193,22 +193,10 @@ func (b *Bugspots) SetRegexp(regexp string) {
 
 // Hotspots returns the top 10% hotspots, ranked by score.
 func (b *Bugspots) Hotspots() ([]*Hotspot, error) {
-	commits, err := b.Repo.bugFixCommits(b.regexp)
-	if err != nil {
-		return nil, err
-	}
-
-	tfirst, err := b.Repo.firstCommitTime()
-	if err != nil {
-		return nil, err
-	}
-
-	tlast, err := b.Repo.lastCommitTime()
-	if err != nil {
-		return nil, err
-	}
-
 	headFiles, err := b.Repo.headFiles()
+	tfirst, err := b.Repo.firstCommitTime()
+	tlast, err := b.Repo.lastCommitTime()
+	commits, err := b.Repo.bugFixCommits(b.regexp)
 	if err != nil {
 		return nil, err
 	}
