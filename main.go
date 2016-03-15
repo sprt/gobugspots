@@ -16,30 +16,35 @@ import (
 
 const defaultCommitRegexp = "\\b(fix(e[sd])?|close[sd]?) (#|gh-)[1-9][0-9]*\\b"
 
-type slicer interface {
-	Iterator() func(*Hotspot) bool
+type slicer struct {
+	tree  *btree.BTree
+	slice []*Hotspot
 }
 
-type percentileSlicer struct {
-	tree       *btree.BTree
-	percentile float64
-	slice      []*Hotspot
+func newSlicer(tree *btree.BTree, sliceCap int) *slicer {
+	return &slicer{
+		tree,
+		make([]*Hotspot, 0, sliceCap),
+	}
 }
 
-func newPercentileSlicer(tree *btree.BTree, percentile float64) *percentileSlicer {
+func (s *slicer) Iterator(item btree.Item) bool {
+	s.slice = append(s.slice, item.(*Hotspot))
+	return len(s.slice) < cap(s.slice)
+}
+
+func newSlicerCount(tree *btree.BTree, count int) *slicer {
+	if count <= 0 {
+		panic("count must be over zero")
+	}
+	return newSlicer(tree, count)
+}
+
+func newSlicerPercentile(tree *btree.BTree, percentile float64) *slicer {
 	if percentile <= 0 || percentile > 1 {
 		panic("percentile must be in range (0, 1]")
 	}
-	return &percentileSlicer{
-		tree,
-		percentile,
-		make([]*Hotspot, 0, int(percentile*float64(tree.Len()))),
-	}
-}
-
-func (s *percentileSlicer) Iterator(item btree.Item) bool {
-	s.slice = append(s.slice, item.(*Hotspot))
-	return len(s.slice) < cap(s.slice)
+	return newSlicer(tree, int(percentile*float64(tree.Len())))
 }
 
 type commit struct {
@@ -215,7 +220,7 @@ func (b *Bugspots) Hotspots() ([]*Hotspot, error) {
 		tree.ReplaceOrInsert(&Hotspot{headFile, score})
 	}
 
-	slicer := newPercentileSlicer(tree, 0.1)
+	slicer := newSlicerPercentile(tree, 0.1)
 	tree.Ascend(slicer.Iterator)
 
 	return slicer.slice, nil
