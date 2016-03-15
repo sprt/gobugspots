@@ -16,46 +16,6 @@ import (
 
 const defaultCommitRegexp = "\\b(fix(e[sd])?|close[sd]?) (#|gh-)[1-9][0-9]*\\b"
 
-func normalizeTimestamp(t, lo, hi int64) float64 {
-	return float64(t-lo) / float64(hi-lo)
-}
-
-func scoreFunc(t float64) float64 {
-	return 1 / (1 + math.Exp(-12*t+12))
-}
-
-func parseLsFiles(raw string) []string {
-	return strings.Split(raw, "\n")
-}
-
-func parseRevList(raw string) (t int, err error) {
-	lines := strings.Split(raw, "\n")
-	if len(lines) != 2 {
-		err = errors.New("no commits")
-		return
-	}
-	t, err = strconv.Atoi(lines[1])
-	return
-}
-
-// assumes `git log --format=format:%ct --name-only'
-func parseLog(raw string) ([]commit, error) {
-	if raw == "" {
-		return []commit{}, nil
-	}
-	commits := []commit{}
-	for _, commitRaw := range strings.Split(raw, "\n\n") {
-		lines := strings.Split(commitRaw, "\n")
-		timestamp, err := strconv.Atoi(lines[0])
-		if err != nil {
-			return []commit{}, fmt.Errorf("invalid timestamp '%v'", lines[0])
-		}
-		t := time.Unix(int64(timestamp), 0)
-		commits = append(commits, commit{t, lines[1:]})
-	}
-	return commits, nil
-}
-
 type slicer interface {
 	Iterator() func(*Hotspot) bool
 }
@@ -117,6 +77,10 @@ func (r *Repo) cmdOutput(cmd string, args ...string) (out string, err error) {
 	return
 }
 
+func parseLsFiles(raw string) []string {
+	return strings.Split(raw, "\n")
+}
+
 // headFiles returns the files at HEAD.
 func (r *Repo) headFiles() (headFiles []string, err error) {
 	out, err := r.cmdOutput("git", "ls-files")
@@ -125,6 +89,24 @@ func (r *Repo) headFiles() (headFiles []string, err error) {
 	}
 	headFiles = parseLsFiles(out)
 	return
+}
+
+// assumes `git log --format=format:%ct --name-only'
+func parseLog(raw string) ([]commit, error) {
+	if raw == "" {
+		return []commit{}, nil
+	}
+	commits := []commit{}
+	for _, commitRaw := range strings.Split(raw, "\n\n") {
+		lines := strings.Split(commitRaw, "\n")
+		timestamp, err := strconv.Atoi(lines[0])
+		if err != nil {
+			return []commit{}, fmt.Errorf("invalid timestamp '%v'", lines[0])
+		}
+		t := time.Unix(int64(timestamp), 0)
+		commits = append(commits, commit{t, lines[1:]})
+	}
+	return commits, nil
 }
 
 // bugFixCommits returns the bug-fix commits.
@@ -140,6 +122,16 @@ func (r *Repo) bugFixCommits(regexp string) ([]commit, error) {
 		return []commit{}, err
 	}
 	return commits, nil
+}
+
+func parseRevList(raw string) (t int, err error) {
+	lines := strings.Split(raw, "\n")
+	if len(lines) != 2 {
+		err = errors.New("no commits")
+		return
+	}
+	t, err = strconv.Atoi(lines[1])
+	return
 }
 
 // firstCommitTime returns the timestamp of the first commit in the history.
@@ -189,6 +181,14 @@ func NewBugspots(repo *Repo) *Bugspots {
 // SetRegexp sets the regexp parameter.
 func (b *Bugspots) SetRegexp(regexp string) {
 	b.regexp = regexp
+}
+
+func normalizeTimestamp(t, lo, hi int64) float64 {
+	return float64(t-lo) / float64(hi-lo)
+}
+
+func scoreFunc(t float64) float64 {
+	return 1 / (1 + math.Exp(-12*t+12))
 }
 
 // Hotspots returns the top 10% hotspots, ranked by score.
