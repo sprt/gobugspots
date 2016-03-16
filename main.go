@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"flag"
 	"fmt"
 	"log"
 	"math"
@@ -228,8 +229,13 @@ func (b *Bugspots) Hotspots() ([]*Hotspot, error) {
 }
 
 func main() {
+	var regexp string
+	flag.StringVar(&regexp, "regexp", defaultCommitRegexp, "regular expression used to match bug-fixing commits")
+	flag.Parse()
+
 	repo := NewRepoByPath(".")
 	b := NewBugspots(repo)
+	b.SetRegexp(regexp)
 
 	hotspots, err := b.Hotspots()
 	if err != nil {
