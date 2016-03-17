@@ -119,7 +119,7 @@ func parseLog(raw string) ([]commit, error) {
 func (r *Repo) bugFixCommits(regexp string) ([]commit, error) {
 	// --diff-filter ignores commits with no files attached
 	out, err := r.cmdOutput("git", "log", "--diff-filter=ACDMRTUXB",
-		"-E", "-i", "--grep="+regexp, "--format=format:%ct", "--name-only")
+		"-E", "-i", "--grep", regexp, "--format=format:%ct", "--name-only")
 	if err != nil {
 		return []commit{}, err
 	}
