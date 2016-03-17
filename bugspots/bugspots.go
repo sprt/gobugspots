@@ -219,7 +219,9 @@ func (b *Bugspots) Hotspots() ([]*Hotspot, error) {
 				}
 			}
 		}
-		tree.ReplaceOrInsert(&Hotspot{headFile, score})
+		if score != 0 {
+			tree.ReplaceOrInsert(&Hotspot{headFile, score})
+		}
 	}
 
 	slicer := newSlicerPercentile(tree, 0.1)
