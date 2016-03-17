@@ -100,14 +100,14 @@ func (r *Repo) headFiles() (headFiles []string, err error) {
 // assumes `git log --format=format:%ct --name-only'
 func parseLog(raw string) ([]commit, error) {
 	if raw == "" {
-		return []commit{}, nil
+		return nil, nil
 	}
 	commits := []commit{}
 	for _, commitRaw := range strings.Split(raw, "\n\n") {
 		lines := strings.Split(commitRaw, "\n")
 		timestamp, err := strconv.Atoi(lines[0])
 		if err != nil {
-			return []commit{}, fmt.Errorf("invalid timestamp '%v'", lines[0])
+			return nil, fmt.Errorf("invalid timestamp '%v'", lines[0])
 		}
 		t := time.Unix(int64(timestamp), 0)
 		commits = append(commits, commit{t, lines[1:]})
@@ -121,11 +121,11 @@ func (r *Repo) bugFixCommits(regexp string) ([]commit, error) {
 	out, err := r.cmdOutput("git", "log", "--diff-filter=ACDMRTUXB",
 		"-E", "-i", "--grep", regexp, "--format=format:%ct", "--name-only")
 	if err != nil {
-		return []commit{}, err
+		return nil, err
 	}
 	commits, err := parseLog(out)
 	if err != nil {
-		return []commit{}, err
+		return nil, err
 	}
 	return commits, nil
 }
