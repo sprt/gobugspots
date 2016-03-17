@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"os"
 
 	"github.com/sprt/gobugspots/bugspots"
 )
@@ -24,5 +25,9 @@ func main() {
 
 	for _, h := range hotspots {
 		fmt.Printf("%.4f %s\n", h.Score, h.File)
+	}
+
+	if len(hotspots) == 0 {
+		fmt.Fprintln(os.Stderr, "no hotspots")
 	}
 }
