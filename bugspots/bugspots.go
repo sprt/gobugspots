@@ -72,7 +72,11 @@ func (r *Repo) cmdOutput(cmd string, args ...string) (out string, err error) {
 	if err = os.Chdir(r.Path); err != nil {
 		return
 	}
-	defer os.Chdir(wd)
+	defer func() {
+		if err = os.Chdir(wd); err != nil {
+			return
+		}
+	}()
 
 	outb, err := exec.Command(cmd, args...).Output()
 	if err != nil {
