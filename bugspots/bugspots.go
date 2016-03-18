@@ -42,10 +42,10 @@ func newSlicerCount(tree *btree.BTree, count int) *slicer {
 }
 
 func newSlicerPercentile(tree *btree.BTree, percentile float64) *slicer {
-	if percentile <= 0 || percentile > 1 {
-		panic("percentile must be in range (0, 1]")
+	if percentile <= 0 || percentile > 100 {
+		panic("percentile must be in range (0, 100]")
 	}
-	return newSlicer(tree, int(percentile*float64(tree.Len())))
+	return newSlicer(tree, int(percentile/100*float64(tree.Len())))
 }
 
 type commit struct {
@@ -229,7 +229,7 @@ func (b *Bugspots) Hotspots() ([]*Hotspot, error) {
 		}
 	}
 
-	slicer := newSlicerPercentile(tree, 0.1)
+	slicer := newSlicerPercentile(tree, 10)
 	tree.Ascend(slicer.Iterator)
 
 	return slicer.slice, nil
