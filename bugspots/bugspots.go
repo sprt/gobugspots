@@ -176,6 +176,7 @@ func (a Hotspot) Less(b btree.Item) bool {
 	return a.Score > b.(*Hotspot).Score
 }
 
+// Bugspots is the interface to the algorithm.
 type Bugspots struct {
 	Repo   *Repo
 	regexp string
