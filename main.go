@@ -9,9 +9,15 @@ import (
 	"github.com/sprt/gobugspots/bugspots"
 )
 
-func main() {
-	var regexp string
+var (
+	regexp string
+)
+
+func init() {
 	flag.StringVar(&regexp, "regexp", bugspots.DefaultCommitRegexp, "regular expression used to match bug-fixing commits")
+}
+
+func main() {
 	flag.Parse()
 
 	repo := bugspots.NewRepoByPath(".")
