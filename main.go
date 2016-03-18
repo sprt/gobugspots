@@ -25,7 +25,14 @@ func init() {
 	}
 }
 
+func usage() {
+	fmt.Fprintf(os.Stderr, "usage: %s [options] [path]\n\n", os.Args[0])
+	flag.PrintDefaults()
+	fmt.Println()
+}
+
 func main() {
+	flag.Usage = usage
 	flag.Parse()
 
 	repo := bugspots.NewRepoByPath(path)
