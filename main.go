@@ -17,7 +17,7 @@ var (
 	minCount   int
 	maxCount   int
 	percentile float64
-	regexp     string
+	pattern    string
 	path       = defaultPath
 )
 
@@ -25,7 +25,7 @@ func init() {
 	flag.IntVar(&minCount, "min-count", bugspots.DefaultMinCount, "minimum number of hotspots to show")
 	flag.IntVar(&maxCount, "max-count", bugspots.DefaultMaxCount, "maxium number of hotspots to show")
 	flag.Float64Var(&percentile, "percentile", bugspots.DefaultPercentile, "upper percentile of hotspots to show")
-	flag.StringVar(&regexp, "regexp", bugspots.DefaultCommitRegexp, "regular expression used to match bug-fixing commits")
+	flag.StringVar(&pattern, "pattern", bugspots.DefaultCommitPattern, "regular expression used to match bug-fixing commits")
 }
 
 func usage() {
@@ -47,7 +47,7 @@ func main() {
 	b.SetMinCount(minCount)
 	b.SetMaxCount(maxCount)
 	b.SetPercentile(percentile)
-	b.SetRegexp(regexp)
+	b.SetPattern(pattern)
 
 	hotspots, err := b.Hotspots()
 	if err != nil {

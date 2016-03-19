@@ -14,9 +14,9 @@ import (
 )
 
 const (
-	// DefaultCommitRegexp is the default regular expression used to match
+	// DefaultCommitPattern is the default regular expression used to match
 	// bug-fixing commits.
-	DefaultCommitRegexp = "\\b(fix(e[sd])?|close[sd]?) (#|gh-)[1-9][0-9]*\\b"
+	DefaultCommitPattern = "\\b(fix(e[sd])?|close[sd]?) (#|gh-)[1-9][0-9]*\\b"
 	// DefaultMinCount is the default minimum number of hotspots to return.
 	DefaultMinCount = 0
 	// DefaultMaxCount is the default maximum number of hotspots to return.
@@ -166,10 +166,10 @@ func parseLog(raw string) ([]commit, error) {
 }
 
 // bugFixCommits returns the bug-fix commits.
-func (r *Repo) bugFixCommits(regexp string) ([]commit, error) {
+func (r *Repo) bugFixCommits(pattern string) ([]commit, error) {
 	// --diff-filter ignores commits with no files attached
 	out, err := r.cmdOutput("git", "log", "--diff-filter=ACDMRTUXB",
-		"-E", "-i", "--grep", regexp, "--format=format:%ct", "--name-only")
+		"-E", "-i", "--grep", pattern, "--format=format:%ct", "--name-only")
 	if err != nil {
 		return nil, err
 	}
@@ -225,8 +225,8 @@ func (a Hotspot) Less(b btree.Item) bool {
 // Bugspots is the interface to the algorithm.
 type Bugspots struct {
 	*slicerOptions
-	Repo   *Repo
-	regexp string
+	Repo    *Repo
+	pattern string
 }
 
 // NewBugspots returns a pointer to a new Bugspots object.
@@ -234,13 +234,13 @@ func NewBugspots(repo *Repo) *Bugspots {
 	return &Bugspots{
 		slicerOptions: newSlicerOptions(),
 		Repo:          repo,
-		regexp:        DefaultCommitRegexp,
+		pattern:       DefaultCommitPattern,
 	}
 }
 
-// SetRegexp sets the regexp parameter.
-func (b *Bugspots) SetRegexp(regexp string) {
-	b.regexp = regexp
+// SetPattern sets the pattern parameter.
+func (b *Bugspots) SetPattern(pattern string) {
+	b.pattern = pattern
 }
 
 func normalizeTimestamp(t, lo, hi int64) float64 {
@@ -256,7 +256,7 @@ func (b *Bugspots) Hotspots() ([]*Hotspot, error) {
 	headFiles, err := b.Repo.headFiles()
 	tfirst, err := b.Repo.firstCommitTime()
 	tlast, err := b.Repo.lastCommitTime()
-	commits, err := b.Repo.bugFixCommits(b.regexp)
+	commits, err := b.Repo.bugFixCommits(b.pattern)
 	if err != nil {
 		return nil, err
 	}
