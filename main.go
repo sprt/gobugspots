@@ -20,9 +20,6 @@ var (
 
 func init() {
 	flag.StringVar(&regexp, "regexp", bugspots.DefaultCommitRegexp, "regular expression used to match bug-fixing commits")
-	if len(os.Args) >= 2 {
-		path = os.Args[1]
-	}
 }
 
 func usage() {
@@ -34,6 +31,10 @@ func usage() {
 func main() {
 	flag.Usage = usage
 	flag.Parse()
+
+	if len(flag.Args()) > 0 {
+		path = flag.Args()[0]
+	}
 
 	repo := bugspots.NewRepoByPath(path)
 	b := bugspots.NewBugspots(repo)
