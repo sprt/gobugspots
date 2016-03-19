@@ -13,39 +13,85 @@ import (
 	"github.com/google/btree"
 )
 
-// DefaultCommitRegexp is the default regular expression used to match
-// bug-fixing commits.
-const DefaultCommitRegexp = "\\b(fix(e[sd])?|close[sd]?) (#|gh-)[1-9][0-9]*\\b"
+const (
+	// DefaultCommitRegexp is the default regular expression used to match
+	// bug-fixing commits.
+	DefaultCommitRegexp = "\\b(fix(e[sd])?|close[sd]?) (#|gh-)[1-9][0-9]*\\b"
+	// DefaultMinCount is the default minimum number of hotspots to return.
+	DefaultMinCount = 0
+	// DefaultMaxCount is the default maximum number of hotspots to return.
+	DefaultMaxCount = math.MaxInt32 // int is either int32 or int64
+	// DefaultPercentile is the default upper percentile of hotspots to
+	// return.
+	DefaultPercentile = 10.0
+)
+
+type slicerOptions struct {
+	minCount   int
+	maxCount   int
+	percentile float64
+}
+
+func newSlicerOptions() *slicerOptions {
+	return &slicerOptions{
+		minCount:   DefaultMinCount,
+		maxCount:   DefaultMaxCount,
+		percentile: DefaultPercentile,
+	}
+}
+
+// SetMinCount sets the minimum number of hotspots returned by Hotspots.
+func (so *slicerOptions) SetMinCount(minCount int) {
+	if minCount < 0 {
+		panic("minCount cannot be negative")
+	}
+	so.minCount = minCount
+}
+
+// SetMaxCount sets the maximum number of hotspots returned by Hotspots.
+func (so *slicerOptions) SetMaxCount(maxCount int) {
+	if maxCount <= 0 {
+		panic("maxCount must be over zero")
+	}
+	so.maxCount = maxCount
+}
+
+// SetPercentile sets the upper percentile of hotspots returned by Hotspots.
+func (so *slicerOptions) SetPercentile(percentile float64) {
+	if percentile <= 0 || percentile > 100 {
+		panic("percentile must be in range (0, 100]")
+	}
+	so.percentile = percentile
+}
 
 type slicer struct {
+	*slicerOptions
 	tree  *btree.BTree
 	slice []*Hotspot
 }
 
-func newSlicer(tree *btree.BTree, sliceCap int) *slicer {
+func newSlicer(options *slicerOptions, tree *btree.BTree) *slicer {
 	return &slicer{
-		tree,
-		make([]*Hotspot, 0, sliceCap),
+		slicerOptions: options,
+		tree:          tree,
+		slice:         []*Hotspot{},
 	}
 }
 
+// return true to continue iterating, or false to stop
 func (s *slicer) Iterator(item btree.Item) bool {
 	s.slice = append(s.slice, item.(*Hotspot))
-	return len(s.slice) < cap(s.slice)
-}
 
-func newSlicerCount(tree *btree.BTree, count int) *slicer {
-	if count <= 0 {
-		panic("count must be over zero")
+	if reachedMin := len(s.slice) >= s.minCount; !reachedMin {
+		return true
 	}
-	return newSlicer(tree, count)
-}
 
-func newSlicerPercentile(tree *btree.BTree, percentile float64) *slicer {
-	if percentile <= 0 || percentile > 100 {
-		panic("percentile must be in range (0, 100]")
+	if reachedMax := len(s.slice) == s.maxCount; reachedMax {
+		return false
 	}
-	return newSlicer(tree, int(percentile/100*float64(tree.Len())))
+
+	reachedPercentile := len(s.slice) == int(s.percentile/100*float64(s.tree.Len()))
+	return !reachedPercentile
 }
 
 type commit struct {
@@ -178,6 +224,7 @@ func (a Hotspot) Less(b btree.Item) bool {
 
 // Bugspots is the interface to the algorithm.
 type Bugspots struct {
+	*slicerOptions
 	Repo   *Repo
 	regexp string
 }
@@ -185,8 +232,9 @@ type Bugspots struct {
 // NewBugspots returns a pointer to a new Bugspots object.
 func NewBugspots(repo *Repo) *Bugspots {
 	return &Bugspots{
-		Repo:   repo,
-		regexp: DefaultCommitRegexp,
+		slicerOptions: newSlicerOptions(),
+		Repo:          repo,
+		regexp:        DefaultCommitRegexp,
 	}
 }
 
@@ -203,7 +251,7 @@ func scoreFunc(t float64) float64 {
 	return 1 / (1 + math.Exp(-12*t+12))
 }
 
-// Hotspots returns the top 10% hotspots, ranked by score.
+// Hotspots returns the top hotspots, ranked by score.
 func (b *Bugspots) Hotspots() ([]*Hotspot, error) {
 	headFiles, err := b.Repo.headFiles()
 	tfirst, err := b.Repo.firstCommitTime()
@@ -229,7 +277,7 @@ func (b *Bugspots) Hotspots() ([]*Hotspot, error) {
 		}
 	}
 
-	slicer := newSlicerPercentile(tree, 10)
+	slicer := newSlicer(b.slicerOptions, tree)
 	tree.Ascend(slicer.Iterator)
 
 	return slicer.slice, nil

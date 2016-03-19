@@ -14,11 +14,17 @@ const (
 )
 
 var (
-	regexp string
-	path   = defaultPath
+	minCount   int
+	maxCount   int
+	percentile float64
+	regexp     string
+	path       = defaultPath
 )
 
 func init() {
+	flag.IntVar(&minCount, "min-count", bugspots.DefaultMinCount, "minimum number of hotspots to show")
+	flag.IntVar(&maxCount, "max-count", bugspots.DefaultMaxCount, "maxium number of hotspots to show")
+	flag.Float64Var(&percentile, "percentile", bugspots.DefaultPercentile, "upper percentile of hotspots to show")
 	flag.StringVar(&regexp, "regexp", bugspots.DefaultCommitRegexp, "regular expression used to match bug-fixing commits")
 }
 
@@ -38,6 +44,9 @@ func main() {
 
 	repo := bugspots.NewRepoByPath(path)
 	b := bugspots.NewBugspots(repo)
+	b.SetMinCount(minCount)
+	b.SetMaxCount(maxCount)
+	b.SetPercentile(percentile)
 	b.SetRegexp(regexp)
 
 	hotspots, err := b.Hotspots()
