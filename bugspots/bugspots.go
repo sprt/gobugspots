@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -109,27 +108,16 @@ func NewRepoByPath(path string) *Repo {
 	return &Repo{path}
 }
 
-func (r *Repo) cmdOutput(cmd string, args ...string) (out string, err error) {
-	// TODO: make thread-safe
-	wd, err := os.Getwd()
-	if err != nil {
-		return
-	}
-	if err = os.Chdir(r.Path); err != nil {
-		return
-	}
-	defer func() {
-		if err = os.Chdir(wd); err != nil {
-			return
-		}
-	}()
+func (r *Repo) cmdOutput(name string, args ...string) (out string, err error) {
+	cmd := exec.Command(name, args...)
+	cmd.Dir = r.Path
 
-	outb, err := exec.Command(cmd, args...).Output()
+	outb, err := cmd.Output()
 	if err != nil {
 		return
 	}
+
 	out = strings.TrimSpace(string(outb[:]))
-
 	return
 }
 
