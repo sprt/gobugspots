@@ -93,11 +93,6 @@ func (s *slicer) Iterator(item btree.Item) bool {
 	return !reachedPercentile
 }
 
-type commit struct {
-	t     time.Time
-	files []string
-}
-
 type commandOutputter interface {
 	commandOutput(string, ...string) (string, error)
 }
@@ -145,6 +140,11 @@ func (r *Repo) headFiles() (headFiles []string, err error) {
 	}
 	headFiles = parseLsFiles(out)
 	return
+}
+
+type commit struct {
+	t     time.Time
+	files []string
 }
 
 // assumes `git log --format=format:%ct --name-only'
