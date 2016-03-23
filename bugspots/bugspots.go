@@ -179,15 +179,13 @@ func (r *Repo) bugFixCommits(pattern string) ([]commit, error) {
 	return commits, nil
 }
 
-func parseRevList(raw string) (t64 int64, err error) {
+func parseRevList(raw string) (int64, error) {
 	lines := strings.Split(raw, "\n")
 	if len(lines) != 2 {
-		err = errors.New("no commits")
-		return
+		return 0, errors.New("no commits")
 	}
 	t, err := strconv.Atoi(lines[1])
-	t64 = int64(t)
-	return
+	return int64(t), err
 }
 
 // firstCommitTime returns the timestamp of the first commit in the history.
