@@ -98,19 +98,17 @@ type commit struct {
 	files []string
 }
 
-// Repo is a path to a git a repository.
-type Repo struct {
-	Path string
+type commandOutputter interface {
+	commandOutput(string, ...string) (string, error)
 }
 
-// NewRepoByPath returns a pointer to a new Repo.
-func NewRepoByPath(path string) *Repo {
-	return &Repo{path}
+type commandRunner struct {
+	dir string
 }
 
-func (r *Repo) cmdOutput(name string, args ...string) (out string, err error) {
+func (r *commandRunner) commandOutput(name string, args ...string) (out string, err error) {
 	cmd := exec.Command(name, args...)
-	cmd.Dir = r.Path
+	cmd.Dir = r.dir
 
 	outb, err := cmd.Output()
 	if err != nil {
@@ -121,13 +119,27 @@ func (r *Repo) cmdOutput(name string, args ...string) (out string, err error) {
 	return
 }
 
+// Repo is a path to a git a repository.
+type Repo struct {
+	commandOutputter
+	Path string
+}
+
+// NewRepoByPath returns a pointer to a new Repo.
+func NewRepoByPath(path string) *Repo {
+	return &Repo{
+		&commandRunner{path},
+		path,
+	}
+}
+
 func parseLsFiles(raw string) []string {
 	return strings.Split(raw, "\n")
 }
 
 // headFiles returns the files at HEAD.
 func (r *Repo) headFiles() (headFiles []string, err error) {
-	out, err := r.cmdOutput("git", "ls-files")
+	out, err := r.commandOutput("git", "ls-files")
 	if err != nil {
 		return
 	}
@@ -156,7 +168,7 @@ func parseLog(raw string) ([]commit, error) {
 // bugFixCommits returns the bug-fix commits.
 func (r *Repo) bugFixCommits(pattern string) ([]commit, error) {
 	// --diff-filter ignores commits with no files attached
-	out, err := r.cmdOutput("git", "log", "--diff-filter=ACDMRTUXB",
+	out, err := r.commandOutput("git", "log", "--diff-filter=ACDMRTUXB",
 		"-E", "-i", "--grep", pattern, "--format=format:%ct", "--name-only")
 	if err != nil {
 		return nil, err
@@ -181,7 +193,7 @@ func parseRevList(raw string) (t64 int64, err error) {
 
 // firstCommitTime returns the timestamp of the first commit in the history.
 func (r *Repo) firstCommitTime() (t int64, err error) {
-	out, err := r.cmdOutput("git", "rev-list", "--max-parents=0", "--format=%ct", "HEAD")
+	out, err := r.commandOutput("git", "rev-list", "--max-parents=0", "--format=%ct", "HEAD")
 	if err != nil {
 		return
 	}
@@ -190,7 +202,7 @@ func (r *Repo) firstCommitTime() (t int64, err error) {
 
 // lastCommitTime returns the timestamp of the last commit in the history.
 func (r *Repo) lastCommitTime() (t int64, err error) {
-	out, err := r.cmdOutput("git", "rev-list", "--max-count=1", "--format=%ct", "HEAD")
+	out, err := r.commandOutput("git", "rev-list", "--max-count=1", "--format=%ct", "HEAD")
 	if err != nil {
 		return
 	}
