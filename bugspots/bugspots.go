@@ -149,7 +149,7 @@ type commit struct {
 // assumes `git log --format=format:%ct --name-only'
 func parseLog(raw string) ([]commit, error) {
 	if raw == "" {
-		return nil, nil
+		return []commit{}, nil
 	}
 	commits := []commit{}
 	for _, commitRaw := range strings.Split(raw, "\n\n") {
