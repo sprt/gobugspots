@@ -93,37 +93,33 @@ func (s *slicer) Iterator(item btree.Item) bool {
 	return !reachedPercentile
 }
 
-type commandOutputter interface {
-	commandOutput(string, ...string) (string, error)
-}
+type commandOutputter func(string, ...string) (string, error)
 
-type commandRunner struct {
-	dir string
-}
+func newCommandOutputter(dir string) commandOutputter {
+	return func(name string, args ...string) (out string, err error) {
+		cmd := exec.Command(name, args...)
+		cmd.Dir = dir
 
-func (r *commandRunner) commandOutput(name string, args ...string) (out string, err error) {
-	cmd := exec.Command(name, args...)
-	cmd.Dir = r.dir
+		outb, err := cmd.Output()
+		if err != nil {
+			return
+		}
 
-	outb, err := cmd.Output()
-	if err != nil {
+		out = strings.TrimSpace(string(outb[:]))
 		return
 	}
-
-	out = strings.TrimSpace(string(outb[:]))
-	return
 }
 
 // Repo is a path to a git a repository.
 type Repo struct {
-	commandOutputter
-	Path string
+	commandOutput commandOutputter
+	Path          string
 }
 
 // NewRepoByPath returns a pointer to a new Repo.
 func NewRepoByPath(path string) *Repo {
 	return &Repo{
-		&commandRunner{path},
+		newCommandOutputter(path),
 		path,
 	}
 }
