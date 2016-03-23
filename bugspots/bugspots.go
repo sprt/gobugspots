@@ -125,6 +125,9 @@ func NewRepoByPath(path string) *Repo {
 }
 
 func parseLsFiles(raw string) []string {
+	if raw == "" {
+		return []string{}
+	}
 	return strings.Split(raw, "\n")
 }
 
