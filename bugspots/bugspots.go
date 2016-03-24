@@ -5,11 +5,10 @@ import (
 	"fmt"
 	"math"
 	"os/exec"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/google/btree"
 )
 
 const (
@@ -24,74 +23,6 @@ const (
 	// return.
 	DefaultPercentile = 10.0
 )
-
-type slicerOptions struct {
-	minCount   int
-	maxCount   int
-	percentile float64
-}
-
-func newSlicerOptions() *slicerOptions {
-	return &slicerOptions{
-		minCount:   DefaultMinCount,
-		maxCount:   DefaultMaxCount,
-		percentile: DefaultPercentile,
-	}
-}
-
-// SetMinCount sets the minimum number of hotspots returned by Hotspots.
-func (so *slicerOptions) SetMinCount(minCount int) {
-	if minCount < 0 {
-		panic("minCount cannot be negative")
-	}
-	so.minCount = minCount
-}
-
-// SetMaxCount sets the maximum number of hotspots returned by Hotspots.
-func (so *slicerOptions) SetMaxCount(maxCount int) {
-	if maxCount <= 0 {
-		panic("maxCount must be over zero")
-	}
-	so.maxCount = maxCount
-}
-
-// SetPercentile sets the upper percentile of hotspots returned by Hotspots.
-func (so *slicerOptions) SetPercentile(percentile float64) {
-	if percentile <= 0 || percentile > 100 {
-		panic("percentile must be in range (0, 100]")
-	}
-	so.percentile = percentile
-}
-
-type slicer struct {
-	*slicerOptions
-	tree  *btree.BTree
-	slice []*Hotspot
-}
-
-func newSlicer(options *slicerOptions, tree *btree.BTree) *slicer {
-	return &slicer{
-		slicerOptions: options,
-		tree:          tree,
-		slice:         []*Hotspot{},
-	}
-}
-
-// return true to continue iterating, or false to stop
-func (s *slicer) Iterator(item btree.Item) bool {
-	s.slice = append(s.slice, item.(*Hotspot))
-
-	if reachedMin := len(s.slice) >= s.minCount; !reachedMin {
-		return true
-	}
-
-	if reachedMax := len(s.slice) == s.maxCount; reachedMax {
-		return false
-	}
-
-	reachedPercentile := len(s.slice) == int(s.percentile/100*float64(s.tree.Len()))
-	return !reachedPercentile
-}
 
 type commandOutputter func(string, ...string) (string, error)
 
@@ -206,32 +137,23 @@ func (r *Repo) lastCommitTime() (t int64, err error) {
 	return parseRevList(out)
 }
 
-// Hotspot represents a bug-prone file.
-type Hotspot struct {
-	// File is a path relative to the working directory.
-	File string
-	// Score is the score of the file according to the ranking function.
-	Score float64
-}
-
-// Less returns true if a.Score > b.Score (sic).
-func (a Hotspot) Less(b btree.Item) bool {
-	return a.Score > b.(*Hotspot).Score
-}
-
 // Bugspots is the interface to the algorithm.
 type Bugspots struct {
-	*slicerOptions
-	Repo    *Repo
-	pattern string
+	Repo       *Repo
+	pattern    string
+	minCount   int
+	maxCount   int
+	percentile float64
 }
 
 // NewBugspots returns a pointer to a new Bugspots object.
 func NewBugspots(repo *Repo) *Bugspots {
 	return &Bugspots{
-		slicerOptions: newSlicerOptions(),
-		Repo:          repo,
-		pattern:       DefaultCommitPattern,
+		Repo:       repo,
+		pattern:    DefaultCommitPattern,
+		minCount:   DefaultMinCount,
+		maxCount:   DefaultMaxCount,
+		percentile: DefaultPercentile,
 	}
 }
 
@@ -248,8 +170,22 @@ func scoreFunc(t float64) float64 {
 	return 1 / (1 + math.Exp(-12*t+12))
 }
 
-// Hotspots returns the top hotspots, ranked by score.
-func (b *Bugspots) Hotspots() ([]*Hotspot, error) {
+// Hotspot represents a bug-prone file.
+type Hotspot struct {
+	// File is a path relative to the working directory.
+	File string
+	// Score is the score of the file according to the ranking function.
+	Score float64
+}
+
+type hotspotList []Hotspot
+
+func (l hotspotList) Len() int           { return len(l) }
+func (l hotspotList) Swap(i, j int)      { l[i], l[j] = l[j], l[i] }
+func (l hotspotList) Less(i, j int) bool { return l[i].Score > l[j].Score } // sic
+
+// Hotspots returns the hotspots ranked by score.
+func (b *Bugspots) Hotspots() ([]Hotspot, error) {
 	headFiles, err := b.Repo.headFiles()
 	tfirst, err := b.Repo.firstCommitTime()
 	tlast, err := b.Repo.lastCommitTime()
@@ -258,7 +194,7 @@ func (b *Bugspots) Hotspots() ([]*Hotspot, error) {
 		return nil, err
 	}
 
-	tree := btree.New(2)
+	hotspots := make(hotspotList, 0, len(headFiles))
 	for _, headFile := range headFiles {
 		score := 0.0
 		for _, commit := range commits {
@@ -270,12 +206,52 @@ func (b *Bugspots) Hotspots() ([]*Hotspot, error) {
 			}
 		}
 		if score != 0 {
-			tree.ReplaceOrInsert(&Hotspot{headFile, score})
+			hotspots = append(hotspots, Hotspot{headFile, score})
 		}
 	}
+	sort.Sort(hotspots)
 
-	slicer := newSlicer(b.slicerOptions, tree)
-	tree.Ascend(slicer.Iterator)
+	return hotspots, nil
+}
 
-	return slicer.slice, nil
+// Slicer is a helper class that simplifies extracting a specified upper
+// percentile from a slice of Hotspot objects, given a minimum and a maximum
+// number of entries to extract.
+type Slicer struct {
+	minCount   int
+	maxCount   int
+	percentile float64
+}
+
+// NewSlicer returns a pointer to a new Slicer object.
+func NewSlicer(percentile float64) *Slicer {
+	return &Slicer{
+		minCount:   DefaultMinCount,
+		maxCount:   DefaultMaxCount,
+		percentile: percentile,
+	}
+}
+
+// SetMinCount sets the minimum number of hotspots to return,
+// regardless of the specified upper percentile.
+func (s *Slicer) SetMinCount(minCount int) {
+	if minCount < 0 {
+		panic("minCount must be non-negative")
+	}
+	s.minCount = minCount
+}
+
+// SetMaxCount sets the maximum number of hotspots to return,
+// regardless of the specified upper percentile.
+func (s *Slicer) SetMaxCount(maxCount int) {
+	if maxCount <= 0 {
+		panic("maxCount must be over zero")
+	}
+	s.maxCount = maxCount
+}
+
+// Slice returns the slice.
+func (s *Slicer) Slice(hotspots []Hotspot) []Hotspot {
+	retCount := math.Min(float64(s.maxCount), math.Max(float64(s.minCount), s.percentile/100*float64(len(hotspots))))
+	return hotspots[:int(retCount)]
 }

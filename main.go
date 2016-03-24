@@ -44,15 +44,17 @@ func main() {
 
 	repo := bugspots.NewRepoByPath(path)
 	b := bugspots.NewBugspots(repo)
-	b.SetMinCount(minCount)
-	b.SetMaxCount(maxCount)
-	b.SetPercentile(percentile)
 	b.SetPattern(pattern)
 
 	hotspots, err := b.Hotspots()
 	if err != nil {
 		log.Fatalln(err)
 	}
+
+	s := bugspots.NewSlicer(percentile)
+	s.SetMinCount(minCount)
+	s.SetMaxCount(maxCount)
+	hotspots = s.Slice(hotspots)
 
 	for _, h := range hotspots {
 		fmt.Printf("%.4f %s\n", h.Score, h.File)
